@@ -62,7 +62,6 @@ pytesseract==0.3.13
 python-dateutil==2.9.0.post0
 python-multipart==0.0.20
 pytz==2025.2
-pywin32==310
 PyYAML==6.0.2
 pyzmq==27.0.0
 referencing==0.36.2
