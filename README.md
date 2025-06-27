@@ -158,10 +158,10 @@ Detects the four corner points of the receipt and returns them for UI adjustment
 **Response Model:**
 A JSON object mapping detected object labels to an array of OCR result entries:
 
-```json
+```plaintext
 {
-  "item_label": [
-    { "text": "Example Text", "confidence": 0.98, ... },
+  item_label: [
+    { text: "Example Text", confidence: 0.98, ... },
     ...
   ],
   ...
