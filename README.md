@@ -15,7 +15,6 @@ Kelompok 1 of Pengantar DeepLearning's Final Project API. A FastAPI-based servic
   * [2. Crop, Detect Objects, and OCR](#2-crop-detect-objects-and-ocr)
 * [Examples](#examples)
 * [Project Structure](#project-structure)
-* [License](#license)
 
 ## Features
 
@@ -135,7 +134,7 @@ Your API will be available at `http://localhost/docs` for the OpenAPI documentat
 
 **Response Model:**
 
-```json
+```plaintext
 { "points": [[x1, y1], [x2, y2], [x3, y3], [x4, y4]] }
 ```
 
