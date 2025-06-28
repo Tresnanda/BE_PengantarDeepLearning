@@ -148,29 +148,16 @@ async def api_process_receipt(request: ProcessRequest):
 
 @app.post(
     "/receipt",
-    summary="Full Receipt Scan (file upload + points)",
+    summary="Scan receipt (File Upload + Points)",
     response_model=Dict[str, List[Dict[str, Any]]],
     tags=["3. Scan Receipt"]
 )
 async def scan_receipt_with_file(
-    file: UploadFile = File(..., description="Receipt image file (JPG/PNG)."),
+    file: UploadFile = File(..., description="Image file of the receipt"),
     points: List[float] = Form(
-        ...,
-        description="Flat list of 8 float values representing 4 corner points: [x1,y1, x2,y2, x3,y3, x4,y4]."
+        ..., description="Flat list of 8 floats representing 4 corner points: [x1,y1, x2,y2, x3,y3, x4,y4]"
     )
 ):
-    """
-    Accepts a receipt **image file** and a flat list of 8 float values as corner points.
-
-    Steps:
-    1. Decodes the uploaded image.
-    2. Crops the receipt using the 4 provided points.
-    3. Detects objects (e.g., text boxes).
-    4. Performs OCR on each detected object.
-    5. Returns structured OCR results.
-
-    Suitable for clients using file upload (e.g., Android, web form).
-    """
     try:
         contents = await file.read()
         image_np = np.frombuffer(contents, np.uint8)
@@ -205,4 +192,59 @@ async def scan_receipt_with_file(
 
     ocr_results = ocr_on_objects(cropped_image, detections)
 
-    return JSONResponse(content=ocr_results)
+    formatted: Dict[str, List[Dict[str, Any]]] = {}
+    for cls, items in ocr_results.items():
+        formatted[cls] = []
+        for entry in items:
+            text = entry['text']
+            data: Dict[str, Any] = {'bbox': entry['bbox']}
+            if cls == 'product_item':
+                m = re.match(r"^(.+?)\s+(\d+)\s+(\d+)\s+([\d,]+)$", text)
+                if m:
+                    name, qty, price, total = m.groups()
+                    data.update({
+                        'product_name': name.strip(),
+                        'quantity': int(qty),
+                        'price_per_item': int(price),
+                        'total_price': int(total.replace(',', ''))
+                    })
+                else:
+                    data['raw_text'] = text
+
+            elif 'voucher' in cls:
+                nums = re.findall(r"\(([\d,]+)\)", text)
+                if nums:
+                    amount = nums[-1]
+                    last_pat = re.escape(f"({amount})")
+                    m2 = re.search(last_pat + r"\s*$", text)
+                    if m2:
+                        name_part = text[:m2.start()].rstrip(" :")
+                    else:
+                        name_part = text
+                    name_upper = name_part.strip().upper()
+                    if name_upper in ['TUNAI', 'KEMBALI', 'TOTAL']:
+                        data['raw_text'] = text
+                    else:
+                        data.update({
+                            'voucher_name': name_part.strip(),
+                            'voucher_price': int(amount.replace(',', ''))
+                        })
+                else:
+                    data['raw_text'] = text
+
+            elif 'discount' in cls or 'disc' in cls.lower():
+                nums = re.findall(r"\((-?[\d,]+)\)", text)
+                if not nums:
+                    nums = re.findall(r"-?[\d,]+", text)
+                if nums:
+                    val = nums[-1]
+                    data['discount'] = abs(int(val.replace(',', '')))
+                else:
+                    data['raw_text'] = text
+
+            else:
+                data['text'] = text
+
+            formatted[cls].append(data)
+
+    return formatted
