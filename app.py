@@ -1,5 +1,6 @@
 import base64
 import io
+import re
 from typing import List, Dict, Any
 
 import cv2
@@ -75,12 +76,6 @@ def read_root():
     tags=["1. Edge Detection"]
 )
 async def api_detect_edges(file: UploadFile = File(..., description="Image file of the receipt.")):
-    """
-    Accepts an image file and attempts to automatically detect the four corners
-    of the receipt.
-
-    Returns the corner points which can be used in a UI for adjustment.
-    """
     image_bytes = await file.read()
     image_bgr = read_image_from_bytes(image_bytes)
 
@@ -102,14 +97,6 @@ async def api_detect_edges(file: UploadFile = File(..., description="Image file 
     tags=["2. OCR Processing"]
 )
 async def api_process_receipt(request: ProcessRequest):
-    """
-    Receives the original image (as base64) and the final corner points.
-    It then performs the following steps:
-    1. Crops the receipt based on the provided points.
-    2. Runs object detection on the cropped receipt.
-    3. Performs OCR on each detected object.
-    4. Returns the structured OCR data.
-    """
     try:
         header, b64_data = request.image_b64.split(",", 1)
         image_bytes = base64.b64decode(b64_data)
@@ -122,10 +109,7 @@ async def api_process_receipt(request: ProcessRequest):
 
     pts_np = np.array(request.points, dtype="float32")
     if pts_np.shape != (4, 2):
-        raise HTTPException(
-            status_code=400,
-            detail="Points must be an array of 4 [x, y] coordinates."
-        )
+        raise HTTPException(status_code=400, detail="Points must be an array of 4 [x, y] coordinates.")
 
     try:
         cropped_image = crop_with_points(image_bgr, pts_np)
@@ -144,7 +128,64 @@ async def api_process_receipt(request: ProcessRequest):
 
     ocr_results = ocr_on_objects(cropped_image, detections)
 
-    return ocr_results
+    formatted: Dict[str, List[Dict[str, Any]]] = {}
+    for cls, items in ocr_results.items():
+        formatted[cls] = []
+        for entry in items:
+            text = entry['text']
+            data: Dict[str, Any] = {'bbox': entry['bbox']}
+            if cls == 'product_item':
+                # Pattern: Name qty price total
+                m = re.match(r"^(.+?)\s+(\d+)\s+(\d+)\s+([\d,]+)$", text)
+                if m:
+                    name, qty, price, total = m.groups()
+                    data.update({
+                        'product_name': name.strip(),
+                        'quantity': int(qty),
+                        'price_per_item': int(price),
+                        'total_price': int(total.replace(',', ''))
+                    })
+                else:
+                    data['raw_text'] = text
+
+            elif 'voucher' in cls:
+
+                nums = re.findall(r"\(([\d,]+)\)", text)
+                if nums:
+                    amount = nums[-1]
+                    last_pat = re.escape(f"({amount})")
+                    m2 = re.search(last_pat + r"\s*$", text)
+                    if m2:
+                        name_part = text[:m2.start()].rstrip(" :")
+                    else:
+                        name_part = text
+                    name_upper = name_part.strip().upper()
+                    if name_upper in ['TUNAI', 'KEMBALI', 'TOTAL']:
+                        data['raw_text'] = text
+                    else:
+                        data.update({
+                            'voucher_name': name_part.strip(),
+                            'voucher_price': int(amount.replace(',', ''))
+                        })
+                else:
+                    data['raw_text'] = text
+
+            elif 'discount' in cls or 'disc' in cls.lower():
+                # Try fetching number inside parentheses first, then any number
+                nums = re.findall(r"\((-?[\d,]+)\)", text)
+                if not nums:
+                    nums = re.findall(r"-?[\d,]+", text)
+                if nums:
+                    val = nums[-1]
+                    data['discount'] = abs(int(val.replace(',', '')))
+                else:
+                    data['raw_text'] = text
+            else:
+                data['text'] = text
+
+            formatted[cls].append(data)
+
+    return formatted
 
 @app.post(
     "/receipt",
@@ -206,3 +247,6 @@ async def scan_receipt_with_file(
     ocr_results = ocr_on_objects(cropped_image, detections)
 
     return JSONResponse(content=ocr_results)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=80)

@@ -71,7 +71,7 @@ Kelompok 1 of Pengantar DeepLearning's Final Project API. A FastAPI-based servic
 2. **Build the Docker image**
 
    ```bash
-   docker build -t receipt-ocr-api .
+   docker build -t receipt-processor-fastapi .
    ```
 
 ## Configuration
@@ -116,7 +116,7 @@ Visit interactive docs at `http://localhost:80/docs`.
 ### With Docker
 
 ```bash
-docker run -d --name receipt-ocr -p 80:80 receipt-ocr-api
+docker run -d --name receipt-ocr -p 80:80 receipt-processor-fastapi
 ```
 
 Your API will be available at `http://localhost/docs` for the OpenAPI documentation.
