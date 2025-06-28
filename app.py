@@ -5,8 +5,9 @@ from typing import List, Dict, Any
 import cv2
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form, JSONResponse
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
+from fastapi.responses import JSONResponse
 from PIL import Image
 from pydantic import BaseModel, Field
 
@@ -145,17 +146,30 @@ async def api_process_receipt(request: ProcessRequest):
 
     return ocr_results
 
-@app.post("/receipt", 
-          summary="Scan receipt",
-          response_model=Dict[str, List[Dict[str, Any]]],
-          tags=["3. Scan receipt"])
-async def api_process_receipt(
-    file: UploadFile = File(...),
-    points: List[float] = Form(...)
+@app.post(
+    "/receipt",
+    summary="Full Receipt Scan (file upload + points)",
+    response_model=Dict[str, List[Dict[str, Any]]],
+    tags=["3. Scan Receipt"]
+)
+async def scan_receipt_with_file(
+    file: UploadFile = File(..., description="Receipt image file (JPG/PNG)."),
+    points: List[float] = Form(
+        ...,
+        description="Flat list of 8 float values representing 4 corner points: [x1,y1, x2,y2, x3,y3, x4,y4]."
+    )
 ):
     """
-    Receives an image file and a list of 8 float numbers (4 corner points as [x1, y1, x2, y2, x3, y3, x4, y4]).
-    Performs cropping, detection, OCR, and returns structured data.
+    Accepts a receipt **image file** and a flat list of 8 float values as corner points.
+
+    Steps:
+    1. Decodes the uploaded image.
+    2. Crops the receipt using the 4 provided points.
+    3. Detects objects (e.g., text boxes).
+    4. Performs OCR on each detected object.
+    5. Returns structured OCR results.
+
+    Suitable for clients using file upload (e.g., Android, web form).
     """
     try:
         contents = await file.read()
@@ -192,7 +206,3 @@ async def api_process_receipt(
     ocr_results = ocr_on_objects(cropped_image, detections)
 
     return JSONResponse(content=ocr_results)
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=80)
