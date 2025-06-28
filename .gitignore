@@ -3,3 +3,5 @@ __pycache__
 modules/__pycache__
 index.html
 requirements.txt1
+.dockerignore
+.gitignore
