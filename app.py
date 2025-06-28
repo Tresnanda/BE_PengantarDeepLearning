@@ -137,7 +137,6 @@ async def api_process_receipt(request: ProcessRequest):
         for entry in items:
             text = entry['text']
             bbox = entry['bbox']
-            # data: Dict[str, Any] = {'bbox': entry['bbox']}
 
             if cls == 'product_item':
                 m = re.match(r"^(.+?)\s+(\d+)\s+(\d+)\s+([\d,]+)$", text)
@@ -164,11 +163,12 @@ async def api_process_receipt(request: ProcessRequest):
                         formatted['product_item_discount'].append(data)
                         continue
 
+                # Fallback for product_item
                 data: Dict[str, Any] = {'bbox': bbox, 'raw_text': text}
                 formatted[cls].append(data)
                             
             elif 'voucher' in cls:
-
+                data: Dict[str, Any] = {'bbox': bbox}
                 nums = re.findall(r"\(([\d,]+)\)", text)
                 if nums:
                     amount = nums[-1]
@@ -188,8 +188,10 @@ async def api_process_receipt(request: ProcessRequest):
                         })
                 else:
                     data['raw_text'] = text
+                formatted[cls].append(data)
 
             elif 'discount' in cls or 'disc' in cls.lower():
+                data: Dict[str, Any] = {'bbox': bbox}
                 nums = re.findall(r"\((-?[\d,]+)\)", text)
                 if not nums:
                     nums = re.findall(r"-?[\d,]+", text)
@@ -198,10 +200,11 @@ async def api_process_receipt(request: ProcessRequest):
                     data['discount'] = abs(int(val.replace(',', '')))
                 else:
                     data['raw_text'] = text
+                formatted[cls].append(data)
+                
             else:
-                data['text'] = text
-
-            formatted[cls].append(data)
+                data: Dict[str, Any] = {'bbox': bbox, 'text': text}
+                formatted[cls].append(data)
 
     return formatted
 
@@ -317,7 +320,6 @@ async def scan_receipt_with_file(
         for entry in items:
             text = entry['text']
             bbox = entry['bbox']
-            # data: Dict[str, Any] = {'bbox': entry['bbox']}
 
             if cls == 'product_item':
                 m = re.match(r"^(.+?)\s+(\d+)\s+(\d+)\s+([\d,]+)$", text)
@@ -344,11 +346,12 @@ async def scan_receipt_with_file(
                         formatted['product_item_discount'].append(data)
                         continue
 
+                # Fallback for product_item
                 data: Dict[str, Any] = {'bbox': bbox, 'raw_text': text}
                 formatted[cls].append(data)
                             
             elif 'voucher' in cls:
-
+                data: Dict[str, Any] = {'bbox': bbox}
                 nums = re.findall(r"\(([\d,]+)\)", text)
                 if nums:
                     amount = nums[-1]
@@ -368,8 +371,10 @@ async def scan_receipt_with_file(
                         })
                 else:
                     data['raw_text'] = text
+                formatted[cls].append(data)
 
             elif 'discount' in cls or 'disc' in cls.lower():
+                data: Dict[str, Any] = {'bbox': bbox}
                 nums = re.findall(r"\((-?[\d,]+)\)", text)
                 if not nums:
                     nums = re.findall(r"-?[\d,]+", text)
@@ -378,10 +383,11 @@ async def scan_receipt_with_file(
                     data['discount'] = abs(int(val.replace(',', '')))
                 else:
                     data['raw_text'] = text
+                formatted[cls].append(data)
+                
             else:
-                data['text'] = text
-
-            formatted[cls].append(data)
+                data: Dict[str, Any] = {'bbox': bbox, 'text': text}
+                formatted[cls].append(data)
 
     return formatted
 
