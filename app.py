@@ -136,12 +136,14 @@ async def api_process_receipt(request: ProcessRequest):
 
         for entry in items:
             text = entry['text']
-            data: Dict[str, Any] = {'bbox': entry['bbox']}
+            bbox = entry['bbox']
+            # data: Dict[str, Any] = {'bbox': entry['bbox']}
 
             if cls == 'product_item':
                 m = re.match(r"^(.+?)\s+(\d+)\s+(\d+)\s+([\d,]+)$", text)
                 if m:
                     name, qty, price, total = m.groups()
+                    data: Dict[str, Any] = {'bbox': bbox}
                     data.update({
                         'product_name': name.strip(),
                         'quantity': int(qty),
@@ -149,22 +151,21 @@ async def api_process_receipt(request: ProcessRequest):
                         'total_price': int(total.replace(',', ''))
                     })
                     formatted[cls].append(data)
-                else:
-                    upper_text = text.upper()
-                    if not any(kw in upper_text for kw in ['TUNAI', 'KEMBALI', 'TOTAL']):
-                        matches = re.findall(r"\(([\d,]+)\)", text)
-                        if matches:
-                            discount_val = int(matches[-1].replace(',', ''))
-                            if 'product_item_discount' not in formatted:
-                                formatted['product_item_discount'] = []
-                            formatted['product_item_discount'].append({
-                                'discount': discount_val,
-                                'bbox': entry['bbox']
-                            })
-                            continue
+                    continue
 
-                    data['raw_text'] = text
-                    formatted[cls].append(data)
+                upper_text = text.upper()
+                if not any(kw in upper_text for kw in ['TUNAI', 'KEMBALI', 'TOTAL']):
+                    matches = re.findall(r"\(([\d,]+)\)", text)
+                    if matches:
+                        discount_val = int(matches[-1].replace(',', ''))
+                        data: Dict[str, Any] = {'bbox': bbox, 'discount': discount_val}
+                        if 'product_item_discount' not in formatted:
+                            formatted['product_item_discount'] = []
+                        formatted['product_item_discount'].append(data)
+                        continue
+
+                data: Dict[str, Any] = {'bbox': bbox, 'raw_text': text}
+                formatted[cls].append(data)
                             
             elif 'voucher' in cls:
 
@@ -315,12 +316,14 @@ async def scan_receipt_with_file(
 
         for entry in items:
             text = entry['text']
-            data: Dict[str, Any] = {'bbox': entry['bbox']}
+            bbox = entry['bbox']
+            # data: Dict[str, Any] = {'bbox': entry['bbox']}
 
             if cls == 'product_item':
                 m = re.match(r"^(.+?)\s+(\d+)\s+(\d+)\s+([\d,]+)$", text)
                 if m:
                     name, qty, price, total = m.groups()
+                    data: Dict[str, Any] = {'bbox': bbox}
                     data.update({
                         'product_name': name.strip(),
                         'quantity': int(qty),
@@ -328,22 +331,21 @@ async def scan_receipt_with_file(
                         'total_price': int(total.replace(',', ''))
                     })
                     formatted[cls].append(data)
-                else:
-                    upper_text = text.upper()
-                    if not any(kw in upper_text for kw in ['TUNAI', 'KEMBALI', 'TOTAL']):
-                        matches = re.findall(r"\(([\d,]+)\)", text)
-                        if matches:
-                            discount_val = int(matches[-1].replace(',', ''))
-                            if 'product_item_discount' not in formatted:
-                                formatted['product_item_discount'] = []
-                            formatted['product_item_discount'].append({
-                                'discount': discount_val,
-                                'bbox': entry['bbox']
-                            })
-                            continue
+                    continue
 
-                    data['raw_text'] = text
-                    formatted[cls].append(data)
+                upper_text = text.upper()
+                if not any(kw in upper_text for kw in ['TUNAI', 'KEMBALI', 'TOTAL']):
+                    matches = re.findall(r"\(([\d,]+)\)", text)
+                    if matches:
+                        discount_val = int(matches[-1].replace(',', ''))
+                        data: Dict[str, Any] = {'bbox': bbox, 'discount': discount_val}
+                        if 'product_item_discount' not in formatted:
+                            formatted['product_item_discount'] = []
+                        formatted['product_item_discount'].append(data)
+                        continue
+
+                data: Dict[str, Any] = {'bbox': bbox, 'raw_text': text}
+                formatted[cls].append(data)
                             
             elif 'voucher' in cls:
 
