@@ -253,7 +253,7 @@ async def api_detect_only(request: ProcessRequest):
         "cropped_image_b64": cropped_data_url
     }
   
-  @app.post(
+@app.post(
     "/receipt",
     summary="Scan receipt (File Upload + Points)",
     response_model=Dict[str, List[Dict[str, Any]]],
