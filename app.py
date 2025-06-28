@@ -135,7 +135,6 @@ async def api_process_receipt(request: ProcessRequest):
             text = entry['text']
             data: Dict[str, Any] = {'bbox': entry['bbox']}
             if cls == 'product_item':
-                # Pattern: Name qty price total
                 m = re.match(r"^(.+?)\s+(\d+)\s+(\d+)\s+([\d,]+)$", text)
                 if m:
                     name, qty, price, total = m.groups()
@@ -147,6 +146,17 @@ async def api_process_receipt(request: ProcessRequest):
                     })
                 else:
                     data['raw_text'] = text
+                    upper_text = text.upper()
+                    if not any(kw in upper_text for kw in ['TUNAI', 'KEMBALI', 'TOTAL']):
+                        matches = re.findall(r"\(([\d,]+)\)", text)
+                        if matches:
+                            discount_str = matches[-1]
+                            try:
+                                discount = int(discount_str.replace(',', ''))
+                                data['product_item_discount'] = discount
+                            except ValueError:
+                                pass
+
 
             elif 'voucher' in cls:
 
@@ -171,7 +181,6 @@ async def api_process_receipt(request: ProcessRequest):
                     data['raw_text'] = text
 
             elif 'discount' in cls or 'disc' in cls.lower():
-                # Try fetching number inside parentheses first, then any number
                 nums = re.findall(r"\((-?[\d,]+)\)", text)
                 if not nums:
                     nums = re.findall(r"-?[\d,]+", text)
@@ -188,10 +197,67 @@ async def api_process_receipt(request: ProcessRequest):
     return formatted
 
 @app.post(
+    "/detect-only",
+    summary="Detect bounding boxes and classes without OCR",
+    response_model=Dict[str, Any],
+    tags=["3. Detection Only"]
+)
+async def api_detect_only(request: ProcessRequest):
+    try:
+        header, b64_data = request.image_b64.split(",", 1)
+        image_bytes = base64.b64decode(b64_data)
+        image_bgr = read_image_from_bytes(image_bytes)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid base64 image string. Ensure it includes the data."
+        )
+
+    pts_np = np.array(request.points, dtype="float32")
+    if pts_np.shape != (4, 2):
+        raise HTTPException(status_code=400, detail="Points must be an array of 4 [x, y] coordinates.")
+
+    try:
+        cropped_image = crop_with_points(image_bgr, pts_np)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if cropped_image.size == 0:
+        raise HTTPException(status_code=500, detail="Cropping resulted in an empty image.")
+
+    detections = detect_objects(cropped_image)
+    if not detections:
+        raise HTTPException(
+            status_code=404,
+            detail="No objects were detected on the cropped receipt."
+        )
+
+    try:
+        _, buffer = cv2.imencode(".jpg", cropped_image)
+        cropped_b64 = base64.b64encode(buffer).decode("utf-8")
+        cropped_data_url = f"data:image/jpeg;base64,{cropped_b64}"
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to encode cropped image: {str(e)}")
+
+    formatted_detections = [
+        {
+            "class_name": det["class_name"],
+            "bbox": det["bbox"],
+            "confidence": det["confidence"]
+        }
+        for det in detections
+    ]
+
+    return {
+        "detections": formatted_detections,
+        "cropped_image_b64": cropped_data_url
+    }
+  
+  @app.post(
     "/receipt",
     summary="Scan receipt (File Upload + Points)",
     response_model=Dict[str, List[Dict[str, Any]]],
-    tags=["3. Scan Receipt"]
+    tags=["4. Scan Receipt"]
 )
 async def scan_receipt_with_file(
     file: UploadFile = File(..., description="Image file of the receipt"),

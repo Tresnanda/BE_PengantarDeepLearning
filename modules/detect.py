@@ -26,7 +26,7 @@ def remove_shadows(img: np.ndarray) -> np.ndarray:
 
 def detect_objects(
     img_bgr: np.ndarray,
-    conf: float = 0.4,
+    conf: float = 0.5,
     imgsz: int = 640
 ) -> List[Dict[str, Any]]:
     """Run YOLO detection and return bounding box info."""
