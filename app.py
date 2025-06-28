@@ -129,11 +129,15 @@ async def api_process_receipt(request: ProcessRequest):
     ocr_results = ocr_on_objects(cropped_image, detections)
 
     formatted: Dict[str, List[Dict[str, Any]]] = {}
+
     for cls, items in ocr_results.items():
-        formatted[cls] = []
+        if cls not in formatted:
+            formatted[cls] = []
+
         for entry in items:
             text = entry['text']
             data: Dict[str, Any] = {'bbox': entry['bbox']}
+
             if cls == 'product_item':
                 m = re.match(r"^(.+?)\s+(\d+)\s+(\d+)\s+([\d,]+)$", text)
                 if m:
@@ -144,20 +148,24 @@ async def api_process_receipt(request: ProcessRequest):
                         'price_per_item': int(price),
                         'total_price': int(total.replace(',', ''))
                     })
+                    formatted[cls].append(data)
                 else:
-                    data['raw_text'] = text
                     upper_text = text.upper()
                     if not any(kw in upper_text for kw in ['TUNAI', 'KEMBALI', 'TOTAL']):
                         matches = re.findall(r"\(([\d,]+)\)", text)
                         if matches:
-                            discount_str = matches[-1]
-                            try:
-                                discount = int(discount_str.replace(',', ''))
-                                data['product_item_discount'] = discount
-                            except ValueError:
-                                pass
+                            discount_val = int(matches[-1].replace(',', ''))
+                            if 'product_item_discount' not in formatted:
+                                formatted['product_item_discount'] = []
+                            formatted['product_item_discount'].append({
+                                'discount': discount_val,
+                                'bbox': entry['bbox']
+                            })
+                            continue
 
-
+                    data['raw_text'] = text
+                    formatted[cls].append(data)
+                            
             elif 'voucher' in cls:
 
                 nums = re.findall(r"\(([\d,]+)\)", text)
@@ -300,11 +308,15 @@ async def scan_receipt_with_file(
     ocr_results = ocr_on_objects(cropped_image, detections)
 
     formatted: Dict[str, List[Dict[str, Any]]] = {}
+
     for cls, items in ocr_results.items():
-        formatted[cls] = []
+        if cls not in formatted:
+            formatted[cls] = []
+
         for entry in items:
             text = entry['text']
             data: Dict[str, Any] = {'bbox': entry['bbox']}
+
             if cls == 'product_item':
                 m = re.match(r"^(.+?)\s+(\d+)\s+(\d+)\s+([\d,]+)$", text)
                 if m:
@@ -315,10 +327,26 @@ async def scan_receipt_with_file(
                         'price_per_item': int(price),
                         'total_price': int(total.replace(',', ''))
                     })
+                    formatted[cls].append(data)
                 else:
-                    data['raw_text'] = text
+                    upper_text = text.upper()
+                    if not any(kw in upper_text for kw in ['TUNAI', 'KEMBALI', 'TOTAL']):
+                        matches = re.findall(r"\(([\d,]+)\)", text)
+                        if matches:
+                            discount_val = int(matches[-1].replace(',', ''))
+                            if 'product_item_discount' not in formatted:
+                                formatted['product_item_discount'] = []
+                            formatted['product_item_discount'].append({
+                                'discount': discount_val,
+                                'bbox': entry['bbox']
+                            })
+                            continue
 
+                    data['raw_text'] = text
+                    formatted[cls].append(data)
+                            
             elif 'voucher' in cls:
+
                 nums = re.findall(r"\(([\d,]+)\)", text)
                 if nums:
                     amount = nums[-1]
@@ -348,7 +376,6 @@ async def scan_receipt_with_file(
                     data['discount'] = abs(int(val.replace(',', '')))
                 else:
                     data['raw_text'] = text
-
             else:
                 data['text'] = text
 

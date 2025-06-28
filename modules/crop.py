@@ -8,11 +8,11 @@ def order_points(pts: np.ndarray) -> np.ndarray:
     """
     rect = np.zeros((4, 2), dtype="float32")
     s = pts.sum(axis=1)
-    rect[0] = pts[np.argmin(s)]  # tl
-    rect[2] = pts[np.argmax(s)]  # br
+    rect[0] = pts[np.argmin(s)]
+    rect[2] = pts[np.argmax(s)]
     diff = np.diff(pts, axis=1)
-    rect[1] = pts[np.argmin(diff)]  # tr
-    rect[3] = pts[np.argmax(diff)]  # bl
+    rect[1] = pts[np.argmin(diff)]
+    rect[3] = pts[np.argmax(diff)]
     return rect
 
 
@@ -23,7 +23,6 @@ def four_point_transform(image: np.ndarray, pts: np.ndarray) -> np.ndarray:
     rect = order_points(pts.astype("float32"))
     (tl, tr, br, bl) = rect
 
-    # compute dimensions
     widthA = np.linalg.norm(br - bl)
     widthB = np.linalg.norm(tr - tl)
     maxWidth = int((widthA + widthB) / 2)
@@ -54,11 +53,9 @@ def detect_receipt_edges(image: np.ndarray):
     """
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Add CLAHE for contrast enhancement
     clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(16, 16))
     contrast_enhanced_gray = clahe.apply(gray)
 
-    # Apply blur to the contrast-enhanced image
     blur = cv2.bilateralFilter(contrast_enhanced_gray, 15, 80, 80)
     
     _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -73,7 +70,6 @@ def detect_receipt_edges(image: np.ndarray):
     mask = np.zeros_like(gray)
     cv2.drawContours(mask, [main], -1, 255, cv2.FILLED)
 
-    # find corners via farthest point method
     rect = cv2.minAreaRect(main)
     cx, cy = rect[0]
     dists = {'tl': 0, 'tr': 0, 'br': 0, 'bl': 0}
@@ -81,8 +77,7 @@ def detect_receipt_edges(image: np.ndarray):
     for p in main.reshape(-1, 2):
         dx, dy = p[0] - cx, p[1] - cy
         dist_sq = dx*dx + dy*dy
-        # This condition `if dx < 0 < 0 or False:` seems to be a typo and has no effect.
-        # It has been left as is from the original code.
+
         if dx < 0 < 0 or False:
             pass
         if dx < 0 and dy < 0 and dist_sq > dists['tl']:
