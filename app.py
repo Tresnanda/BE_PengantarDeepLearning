@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 import cv2
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
 from PIL import Image
 from pydantic import BaseModel, Field
@@ -144,6 +144,54 @@ async def api_process_receipt(request: ProcessRequest):
     ocr_results = ocr_on_objects(cropped_image, detections)
 
     return ocr_results
+
+@app.post("/receipt", 
+          summary="Scan receipt",
+          response_model=Dict[str, List[Dict[str, Any]]],
+          tags=["3. Scan receipt"])
+async def api_process_receipt(
+    file: UploadFile = File(...),
+    points: List[float] = Form(...)
+):
+    """
+    Receives an image file and a list of 8 float numbers (4 corner points as [x1, y1, x2, y2, x3, y3, x4, y4]).
+    Performs cropping, detection, OCR, and returns structured data.
+    """
+    try:
+        contents = await file.read()
+        image_np = np.frombuffer(contents, np.uint8)
+        image_bgr = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
+        if image_bgr is None:
+            raise ValueError("Failed to decode image.")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image file. {str(e)}")
+
+    try:
+        pts_np = np.array(points, dtype="float32").reshape((4, 2))
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Points must be a list of 8 float values (4 x [x, y])."
+        )
+
+    try:
+        cropped_image = crop_with_points(image_bgr, pts_np)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if cropped_image.size == 0:
+        raise HTTPException(status_code=500, detail="Cropping resulted in an empty image.")
+
+    detections = detect_objects(cropped_image)
+    if not detections:
+        raise HTTPException(
+            status_code=404,
+            detail="No objects were detected on the cropped receipt."
+        )
+
+    ocr_results = ocr_on_objects(cropped_image, detections)
+
+    return JSONResponse(content=ocr_results)
 
 
 if __name__ == "__main__":
