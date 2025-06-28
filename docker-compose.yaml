@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  receipt-ocr-api:
+    build: .
+    container_name: receipt-ocr
+    ports:
+      - "80:80"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
